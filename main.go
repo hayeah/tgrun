@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/armon/circbuf"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
 
@@ -70,9 +72,18 @@ type runner struct {
 	ChatID int64
 	Bot    *tgbotapi.BotAPI
 	Cmd    *exec.Cmd
+
+	buf *circbuf.Buffer
 }
 
 func (r *runner) start() error {
+	// FIXME: make me threadsafe...
+	buf, err := circbuf.NewBuffer(255)
+	if err != nil {
+		return err
+	}
+	r.buf = buf
+
 	go func() {
 		err := r.updateStatus()
 		if err != nil {
@@ -88,9 +99,10 @@ func (r *runner) start() error {
 func (r *runner) runCommand() error {
 	c := r.Cmd
 
-	c.Stderr = os.Stderr
-	c.Stdout = os.Stdout
 	c.Stdin = os.Stdin
+
+	c.Stdout = io.MultiWriter(os.Stdout, r.buf)
+	c.Stderr = io.MultiWriter(os.Stderr, r.buf)
 
 	err := c.Start()
 	if err != nil {
@@ -127,7 +139,7 @@ func (r *runner) editMessage(msgid int, format string, a ...interface{}) (tgbota
 }
 
 func (r *runner) updateStatus() error {
-	// i := 0
+	// This loop terminates when the program terminates...
 	start := time.Now()
 
 	var m tgbotapi.Message
@@ -137,8 +149,17 @@ func (r *runner) updateStatus() error {
 		time.Sleep(2 * time.Second)
 		elapsed := time.Now().Sub(start)
 
+		txt := fmt.Sprintf("Uptime: %s", elapsed)
+
+		tail := r.buf.Bytes()
+		if len(tail) > 0 {
+			txt = fmt.Sprintf("%s\n\n%s", txt, string(tail))
+		}
+
+		// create or update status text
+
 		if m.MessageID == 0 {
-			m, err = r.sendMessage("Uptime: %s", elapsed)
+			m, err = r.sendMessage("Uptime: %s", txt)
 
 			if err != nil {
 				return err
@@ -147,7 +168,7 @@ func (r *runner) updateStatus() error {
 			continue
 		}
 
-		_, err = r.editMessage(m.MessageID, "Uptime: %s", elapsed)
+		_, err = r.editMessage(m.MessageID, "Uptime: %s", txt)
 
 		if err != nil {
 			return err
