@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/armon/circbuf"
@@ -67,18 +68,50 @@ func run() error {
 	return err
 }
 
+// syncBuf is a threadsafe wrapper for *circbuf.Buffer
+type syncBuf struct {
+	buf *circbuf.Buffer
+	sync.Mutex
+}
+
+func newSyncBuf(size int64) (*syncBuf, error) {
+	buf, err := circbuf.NewBuffer(size)
+	if err != nil {
+		return nil, err
+	}
+
+	return &syncBuf{
+		buf: buf,
+	}, nil
+}
+
+func (b *syncBuf) Write(buf []byte) (int, error) {
+	b.Lock()
+	defer b.Unlock()
+	return b.buf.Write(buf)
+}
+
+func (b *syncBuf) Bytes() []byte {
+	b.Lock()
+	defer b.Unlock()
+	data := b.buf.Bytes()
+	buf := make([]byte, len(data))
+	copy(buf, data)
+	return buf
+}
+
 type runner struct {
 	Host   string
 	ChatID int64
 	Bot    *tgbotapi.BotAPI
 	Cmd    *exec.Cmd
 
-	buf *circbuf.Buffer
+	buf *syncBuf
 }
 
 func (r *runner) start() error {
 	// FIXME: make me threadsafe...
-	buf, err := circbuf.NewBuffer(255)
+	buf, err := newSyncBuf(512)
 	if err != nil {
 		return err
 	}
