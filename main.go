@@ -158,7 +158,7 @@ func (r *runner) handleInterrupt() {
 }
 
 func (r *runner) Tag() string {
-	return fmt.Sprintf("[%s] %d `%s`", r.Host, r.Cmd.Process.Pid, r.Cmd.Args[0])
+	return fmt.Sprintf("[%s pid=%d] `%s`", r.Host, r.Cmd.Process.Pid, r.Cmd.Args[0])
 }
 
 func (r *runner) sendMessage(format string, a ...interface{}) (tgbotapi.Message, error) {
