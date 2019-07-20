@@ -106,7 +106,8 @@ type runner struct {
 	Bot    *tgbotapi.BotAPI
 	Cmd    *exec.Cmd
 
-	buf *syncBuf
+	startTime time.Time
+	buf       *syncBuf
 }
 
 func (r *runner) start() error {
@@ -116,6 +117,8 @@ func (r *runner) start() error {
 		return err
 	}
 	r.buf = buf
+
+	r.startTime = time.Now()
 
 	go func() {
 		err := r.updateStatus()
@@ -144,7 +147,7 @@ func (r *runner) runCommand() error {
 
 	c.Wait()
 
-	_, err = r.sendMessage("Exit status: %d", c.ProcessState.ExitCode())
+	_, err = r.sendMessage("Exit status: %d\nElapsed: %s", c.ProcessState.ExitCode(), r.elapsed())
 	return err
 }
 
@@ -171,18 +174,20 @@ func (r *runner) editMessage(msgid int, format string, a ...interface{}) (tgbota
 	return r.Bot.Send(tgbotapi.NewEditMessageText(r.ChatID, msgid, s))
 }
 
+func (r *runner) elapsed() time.Duration {
+	return time.Now().Sub(r.startTime)
+}
+
 func (r *runner) updateStatus() error {
 	// This loop terminates when the program terminates...
-	start := time.Now()
 
 	var m tgbotapi.Message
 	for {
 		var err error
 
 		time.Sleep(2 * time.Second)
-		elapsed := time.Now().Sub(start)
 
-		txt := fmt.Sprintf("Uptime: %s", elapsed)
+		txt := fmt.Sprintf("Uptime: %s", r.elapsed())
 
 		tail := r.buf.Bytes()
 		if len(tail) > 0 {

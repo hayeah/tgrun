@@ -51,6 +51,7 @@ Uptime: Uptime: 18.181806172s
 On exit, a notification will be sent:
 
 ```
-[mbp15.local pid=9017] `./now.bin`
+[mbp15.local pid=9371] `./now.bin`
 Exit status: -1
+Elapsed: 8.412154429s
 ```
