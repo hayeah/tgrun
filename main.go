@@ -111,7 +111,6 @@ type runner struct {
 }
 
 func (r *runner) start() error {
-	// FIXME: make me threadsafe...
 	buf, err := newSyncBuf(512)
 	if err != nil {
 		return err
